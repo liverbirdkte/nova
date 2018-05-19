@@ -1416,6 +1416,27 @@ class CountableResource(AbsoluteResource):
         self.count_as_dict = count_as_dict
 
 
+class PlacementResource(CountableResource):
+    """Describe a resource where the counts are retrieved from Placement
+    service.
+    """
+
+    def __init__(self, name):
+        def count_as_dict(self, context, project_id, user_id=None):
+            from nova.scheduler.client import report
+            usages = report.SchedulerReportClient().get_usages(
+                project_id, user_id=user_id)
+
+            if self.name in usages:
+                return {
+                    'project': {self.name: usages[self.name]},
+                    'user': {self.name: usages[self.name]}
+                }
+            return {'project': {self.name: 0}, 'user': {self.name: 0}}
+
+        super(PlacementResource, self).__init__(name, count_as_dict)
+
+
 class QuotaEngine(object):
     """Represent the set of recognized quotas."""
 
@@ -1808,6 +1829,13 @@ class QuotaEngine(object):
     @property
     def resources(self):
         return sorted(self._resources.keys())
+
+    def refresh_resources(self, context):
+        all_resources = set(
+            [str(r) for r in objects.Quotas.get_all_resources(context)])
+        unregister_resources = all_resources.difference(self._resources.keys())
+        for res in unregister_resources:
+            self.register_resource(PlacementResource(res))
 
 
 def _keypair_get_count_by_user(context, user_id):
