@@ -637,3 +637,111 @@ class QuotaSetsTestV236(test.NoDBTestCase):
              body={'quota_set': {'cores': 100}})
         for filtered in self.filtered_quotas:
             self.assertNotIn(filtered, res_dict['quota_set'])
+
+
+class RCQuotaSetsTest(test.NoDBTestCase):
+
+    def setUp(self):
+        super(RCQuotaSetsTest, self).setUp()
+        # We need to stub out verify_project_id so that it doesn't
+        # generate an EndpointNotFound exception and result in a
+        # server error.
+        self.stub_out('nova.api.openstack.identity.verify_project_id',
+                      lambda ctx, project_id: True)
+
+        self.flags(enable_network_quota=True)
+        self.useFixture(nova_fixtures.RegisterNetworkQuota())
+        self.old_req = fakes.HTTPRequest.blank('', version='2.1')
+        self.filtered_quotas = ['fixed_ips', 'floating_ips', 'networks',
+            'security_group_rules', 'security_groups']
+        self.quotas = {
+            'cores': {'limit': 20},
+            'fixed_ips': {'limit': -1},
+            'floating_ips': {'limit': 10},
+            'injected_file_content_bytes': {'limit': 10240},
+            'injected_file_path_bytes': {'limit': 255},
+            'injected_files': {'limit': 5},
+            'instances': {'limit': 10},
+            'key_pairs': {'limit': 100},
+            'metadata_items': {'limit': 128},
+            'networks': {'limit': 3},
+            'ram': {'limit': 51200},
+            'security_group_rules': {'limit': 20},
+            'security_groups': {'limit': 10},
+            'server_group_members': {'limit': 10},
+            'server_groups': {'limit': 10},
+            'CUSTOM_RC1': {'limit': 10}
+        }
+        self.defaults = {
+            'cores': 20,
+            'fixed_ips': -1,
+            'floating_ips': 10,
+            'injected_file_content_bytes': 10240,
+            'injected_file_path_bytes': 255,
+            'injected_files': 5,
+            'instances': 10,
+            'key_pairs': 100,
+            'metadata_items': 128,
+            'networks': 3,
+            'ram': 51200,
+            'security_group_rules': 20,
+            'security_groups': 10,
+            'server_group_members': 10,
+            'server_groups': 10,
+            'CUSTOM_RC1': 10
+        }
+        self.controller = quotas_v21.QuotaSetsController()
+        self.req = fakes.HTTPRequest.blank('', version='2.36')
+
+    def tearDown(self):
+        super(RCQuotaSetsTest, self).tearDown()
+        try:
+            quota.QUOTAS._resources.pop('CUSTOM_RC1')
+        except KeyError:
+            pass
+
+    @mock.patch('nova.quota.QUOTAS.register_resource')
+    def test_register_custom_quotas(self, mock_register):
+        self.controller._register_custom_quotas(
+            {
+                'cores': 100,
+                'CUSTOM_RC1': 2,
+                'CUSTOM_RC2': 1
+            })
+        rc_names = [
+            mock_register.call_args_list[0][0][0].name,
+            mock_register.call_args_list[1][0][0].name
+        ]
+        self.assertEqual(2, mock_register.call_count)
+        self.assertIn('CUSTOM_RC1', rc_names)
+        self.assertIn('CUSTOM_RC2', rc_names)
+
+    @mock.patch('nova.quota.QUOTAS.get_project_quotas')
+    def test_show_custom_quota(self, mock_quota,):
+        mock_quota.return_value = self.quotas
+        quota.QUOTAS._resources['CUSTOM_RC1'] = \
+            quota.PlacementResource('CUSTOM_RC1')
+        res_dict = self.controller.show(self.req, 1234)
+        self.assertEqual(10, res_dict['quota_set']['CUSTOM_RC1'])
+
+    @mock.patch('nova.quota.QUOTAS.get_defaults')
+    def test_show_default_custom_quota(self, mock_defaults):
+        mock_defaults.return_value = self.defaults
+        quota.QUOTAS._resources['CUSTOM_RC1'] = \
+            quota.PlacementResource('CUSTOM_RC1')
+        res_dict = self.controller.defaults(self.req, 1234)
+        self.assertEqual(10, res_dict['quota_set']['CUSTOM_RC1'])
+
+    @mock.patch('nova.objects.Quotas.create_limit')
+    @mock.patch('nova.quota.QUOTAS.get_project_quotas')
+    @mock.patch('nova.quota.QUOTAS.get_settable_quotas')
+    def test_update_custom_quota(self, mock_settable, mock_quota,
+                                 mock_create_limit):
+        mock_settable.return_value = {'CUSTOM_RC1':
+                                          {'minimum': 5, 'maximum': -1}}
+        self.quotas['CUSTOM_RC1'] = {'limit': 20}
+        mock_quota.return_value = self.quotas
+        res_dict = self.controller.update(
+            self.req, 1234, body={'quota_set': {'CUSTOM_RC1': 20}})
+        mock_create_limit.assert_called_once()
+        self.assertEqual(20, res_dict['quota_set']['CUSTOM_RC1'])

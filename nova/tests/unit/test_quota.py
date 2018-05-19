@@ -2485,3 +2485,31 @@ class NoopQuotaDriverTestCase(test.TestCase):
                                                  quota.QUOTAS._resources,
                                                  'test_project')
         self.assertEqual(self.expected_settable_quotas, result)
+
+
+class TestUpdateResourceDecorator(test.TestCase):
+
+    def setUp(self):
+        super(TestUpdateResourceDecorator, self).setUp()
+        self.context = FakeContext('test_project', 'test_class')
+
+    def tearDown(self):
+        super(TestUpdateResourceDecorator, self).tearDown()
+        try:
+            quota.QUOTAS._resources.pop('CUSTOM_RC')
+        except KeyError:
+            pass
+
+    @mock.patch('nova.objects.Quotas.get_all_resources')
+    def test_decorator(self, mock_all_res):
+        # Test if _update_resources decorator updates QUOTA _resources
+        # attribute
+        mock_all_res.return_value = \
+            quota.QUOTAS._resources.keys() + ['CUSTOM_RC']
+        func = mock.Mock()
+        decorated_func = quota._update_resources(func)
+        decorated_func(quota.QUOTAS, self.context, 'test_project')
+        func.assert_called_once_with(
+            quota.QUOTAS, self.context, 'test_project')
+        quota_resources = sorted(quota.QUOTAS._resources.keys())
+        self.assertEqual(sorted(mock_all_res.return_value), quota_resources)

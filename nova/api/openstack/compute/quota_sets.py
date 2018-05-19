@@ -160,6 +160,8 @@ class QuotaSetsController(wsgi.Controller):
 
         force_update = strutils.bool_from_string(quota_set.get('force',
                                                                'False'))
+
+        self._register_custom_quotas(quota_set)
         settable_quotas = QUOTAS.get_settable_quotas(context, project_id,
                                                      user_id=user_id)
 
@@ -231,3 +233,10 @@ class QuotaSetsController(wsgi.Controller):
                                                    id, user_id)
         else:
             QUOTAS.destroy_all_by_project(context, id)
+
+    def _register_custom_quotas(self, quota_set):
+        # Retrieve custom resource class quota from request
+        custom_resources = [
+            quota.PlacementResource(r) for r in quota_set if r.startswith(
+                objects.resource_provider.ResourceClass.CUSTOM_NAMESPACE)]
+        QUOTAS.register_resources(custom_resources)
