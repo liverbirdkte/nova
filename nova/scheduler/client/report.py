@@ -1240,3 +1240,18 @@ class SchedulerReportClient(object):
                     {"uuid": rp_uuid,
                      "code": resp.status_code,
                      "text": resp.text})
+
+    @safe_connect
+    def get_usage(self, project_id, user_id=None):
+        kwargs = {'project_id': project_id}
+        if user_id:
+            kwargs['user_id'] = user_id
+
+        url = '/usage?%s' % parse.urlencode(kwargs)
+
+        resp = self.get(url, version='1.10')
+        if resp.status_code == 200:
+            data = resp.json()
+            return data['usages']
+
+        LOG.error('Failed to get usages')

@@ -324,6 +324,7 @@ class Quotas(base.NovaObject):
     @base.remotable_classmethod
     def count_as_dict(cls, context, resource, *args, **kwargs):
         """Count a resource and return a dict."""
+        quota.QUOTAS.refresh_resources(context)
         return quota.QUOTAS.count_as_dict(
             context, resource, *args, **kwargs)
 
@@ -500,6 +501,15 @@ class Quotas(base.NovaObject):
         for k, v in api_db_quotas_dict.items():
             main_db_quotas_dict[k] = v
         return main_db_quotas_dict
+
+    @staticmethod
+    @db_api.api_context_manager.reader
+    def _get_all_resources_from_db(context):
+        return context.session.query(api_models.Quota.resource).distinct()
+
+    @classmethod
+    def get_all_resources(cls, context):
+        return [res[0] for res in cls._get_all_resources_from_db(context)]
 
 
 @base.NovaObjectRegistry.register

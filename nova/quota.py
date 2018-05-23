@@ -1416,6 +1416,40 @@ class CountableResource(AbsoluteResource):
         self.count_as_dict = count_as_dict
 
 
+class PlacementResource(CountableResource):
+    """Describe a resource where the counts are retrieved from Placement
+    service.
+    """
+
+    def __init__(self, name):
+        def count_as_dict(context, project_id, user_id=None):
+            from nova.scheduler.client import report
+            usages = report.SchedulerReportClient().get_usages(
+                project_id, user_id=user_id)
+
+            if self.name in usages:
+                return {
+                    'project': {self.name: usages[self.name]},
+                    'user': {self.name: usages[self.name]}
+                }
+            return {'project': {self.name: 0}, 'user': {self.name: 0}}
+
+        super(PlacementResource, self).__init__(name, count_as_dict)
+
+
+def _update_resources(fn):
+
+    def wrapper(self, context, *args, **kwargs):
+        all_resources = set(
+            [str(r) for r in objects.Quotas.get_all_resources(context)])
+        new_resources = all_resources.difference(self._resources.keys())
+        for res in new_resources:
+            self.register_resource(PlacementResource(res))
+        return fn(self, context, *args, **kwargs)
+
+    return wrapper
+
+
 class QuotaEngine(object):
     """Represent the set of recognized quotas."""
 
@@ -1463,6 +1497,7 @@ class QuotaEngine(object):
 
         return self._driver.get_by_class(context, quota_class, resource)
 
+    @_update_resources
     def get_defaults(self, context):
         """Retrieve the default quotas.
 
@@ -1485,6 +1520,7 @@ class QuotaEngine(object):
         return self._driver.get_class_quotas(context, self._resources,
                                              quota_class, defaults=defaults)
 
+    @_update_resources
     def get_user_quotas(self, context, project_id, user_id, quota_class=None,
                         defaults=True, usages=True):
         """Retrieve the quotas for the given user and project.
@@ -1508,6 +1544,7 @@ class QuotaEngine(object):
                                             defaults=defaults,
                                             usages=usages)
 
+    @_update_resources
     def get_project_quotas(self, context, project_id, quota_class=None,
                            defaults=True, usages=True, remains=False):
         """Retrieve the quotas for the given project.
@@ -1546,6 +1583,7 @@ class QuotaEngine(object):
                                                 project_id,
                                                 user_id=user_id)
 
+    @_update_resources
     def count_as_dict(self, context, resource, *args, **kwargs):
         """Count a resource and return a dict.
 
