@@ -74,6 +74,8 @@ class QuotaSetsController(wsgi.Controller):
             raise webob.exc.HTTPBadRequest(explanation=msg)
 
     def _get_quotas(self, context, id, user_id=None, usages=False):
+        # Refresh QUOTAS resources before fetching
+        QUOTAS.refresh_resources(context)
         if user_id:
             values = QUOTAS.get_user_quotas(context, id, user_id,
                                             usages=usages)
@@ -235,6 +237,7 @@ class QuotaSetsController(wsgi.Controller):
             QUOTAS.destroy_all_by_project(context, id)
 
     def _register_custom_quotas(self, quota_set):
+
         # Retrieve custom resource class quota from request
         custom_resources = [
             quota.PlacementResource(r) for r in quota_set if r.startswith(
