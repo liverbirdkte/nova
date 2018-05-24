@@ -1053,20 +1053,23 @@ class ComputeUtilsQuotaTestCase(test.TestCase):
         mock_reserve.assert_called_once_with(project_id=inst.project_id,
                                              user_id=inst.user_id, **deltas)
 
+    @mock.patch('nova.objects.Quotas.get_all_resources')
     @mock.patch('nova.objects.Quotas.count_as_dict')
     def test_check_instance_quota_exceeds_with_multiple_resources(self,
-                                                                  mock_count):
+                                                                  mock_count,
+                                                                  mock_rs):
         quotas = {'cores': 1, 'instances': 1, 'ram': 512}
         overs = ['cores', 'instances', 'ram']
         over_quota_args = dict(quotas=quotas,
                                usages={'instances': 1, 'cores': 1, 'ram': 512},
                                overs=overs)
         e = exception.OverQuota(**over_quota_args)
-        fake_flavor = objects.Flavor(vcpus=1, memory_mb=512)
+        fake_flavor = objects.Flavor(vcpus=1, memory_mb=512, extra_specs={})
         instance_num = 1
         proj_count = {'instances': 1, 'cores': 1, 'ram': 512}
         user_count = proj_count.copy()
         mock_count.return_value = {'project': proj_count, 'user': user_count}
+        mock_rs.return_value = []
         with mock.patch.object(objects.Quotas, 'limit_check_project_and_user',
                                side_effect=e):
             try:

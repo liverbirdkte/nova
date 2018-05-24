@@ -324,7 +324,6 @@ class Quotas(base.NovaObject):
     @base.remotable_classmethod
     def count_as_dict(cls, context, resource, *args, **kwargs):
         """Count a resource and return a dict."""
-        quota.QUOTAS.refresh_resources(context)
         return quota.QUOTAS.count_as_dict(
             context, resource, *args, **kwargs)
 

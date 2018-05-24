@@ -616,15 +616,6 @@ class QuotaSetsTestV236(test.NoDBTestCase):
         for filtered in self.filtered_quotas:
             self.assertNotIn(filtered, res_dict['quota_set'])
 
-    @mock.patch('nova.quota.QUOTAS.get_project_quotas')
-    def test_quotas_update_input_filtered(self, mock_quotas):
-        mock_quotas.return_value = self.quotas
-        self._ensure_filtered_quotas_existed_in_old_api()
-        for filtered in self.filtered_quotas:
-            self.assertRaises(exception.ValidationError,
-                self.controller.update, self.req, 1234,
-                body={'quota_set': {filtered: 100}})
-
     @mock.patch('nova.objects.Quotas.create_limit')
     @mock.patch('nova.quota.QUOTAS.get_settable_quotas')
     @mock.patch('nova.quota.QUOTAS.get_project_quotas')

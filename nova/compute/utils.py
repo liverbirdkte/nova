@@ -739,13 +739,14 @@ def check_num_instances_quota(context, instance_type, min_count,
     req_ram = max_count * instance_type.memory_mb
 
     resources = {}
-    quota_resources = objects.Quotas.get_all_resources(context)
 
-    for i in instance_type.extra_specs:
-        if i.statswith('resources:'):
-            _, rc_name = i.split(':')
-            if rc_name in quota_resources:
-                resources[rc_name] = int(instance_type.extra_specs[i])
+    if hasattr(instance_type, 'extra_specs'):
+        quota_resources = objects.Quotas.get_all_resources(context)
+        for i in instance_type.extra_specs:
+            if i.statswith('resources:'):
+                _, rc_name = i.split(':')
+                if rc_name in quota_resources:
+                    resources[rc_name] = int(instance_type.extra_specs[i])
 
     deltas = {'instances': max_count, 'cores': req_cores, 'ram': req_ram}
     deltas.update(resources)
